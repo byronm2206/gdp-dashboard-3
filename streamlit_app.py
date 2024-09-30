@@ -1,151 +1,131 @@
 import streamlit as st
-import pandas as pd
-import math
-from pathlib import Path
+import numpy as np
+import matplotlib.pyplot as plt
 
-# Set the title and favicon that appear in the Browser's tab bar.
-st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
+# Función para limpiar la pantalla
+def limpiar_pantalla():
+    st.session_state.clear()
+
+# Título de la aplicación
+st.subheader("Simulación de Punto de Equilibrio y Utilidad")
+st.subheader("Autor: Byron Méndez")
+
+# Selección de tipo de cálculo
+tipo_calculo = st.radio(
+    "Seleccione el tipo de cálculo:",
+    ('Cálculo con unidades', 'Cálculo con porcentaje de costo variable', 'Cálculo con total de gastos y ventas', 'Cálculo con total de ventas y % costo variable')
 )
 
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
+# Inputs y cálculos según la selección
+if tipo_calculo == 'Cálculo con unidades':
+    # Parámetros de entrada
+    gastos_fijos = st.number_input('Ingrese los gastos generales ($)', min_value=0, value=0000, step=100, key="gastos_fijos")
+    costo_variable = st.number_input('Ingrese el costo variable por unidad ($)', min_value=0.0, value=1.00, step=0.1, key="costo_variable")
+    precio_venta = st.number_input('Ingrese el precio de venta por unidad ($)', min_value=0.0, value=2.00, step=0.1, key="precio_venta")
+    unidades_producir = st.number_input('Unidades a producir', min_value=0, value=0, step=10, key="unidades_producir")
 
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+    # Calcular el punto de equilibrio y la utilidad
+    if precio_venta > costo_variable:
+        punto_equilibrio = gastos_fijos / (precio_venta - costo_variable)
+        ingresos_totales = precio_venta * unidades_producir
+        costos_variables_totales = costo_variable * unidades_producir
+        utilidad = ingresos_totales - (gastos_fijos + costos_variables_totales)
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
+        # Mostrar las salidas
+        st.write(f"Punto de Equilibrio: **{punto_equilibrio:.2f} unidades**")
+        st.write(f"Total de Ventas: **${ingresos_totales:.2f}**")
+        st.write(f"Costos Variables Totales: **${costos_variables_totales:.2f}**")
+        st.write(f"Gastos Generales: **${gastos_fijos:.2f}**")
+        st.write(f"Utilidad: **${utilidad:.2f}**")
 
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
+        # Generar gráfica
+        if st.button("Mostrar Gráfica"):
+            cantidades = np.arange(0, (punto_equilibrio*2), 1) 
+            ingresos_totales_graf = precio_venta * cantidades
+            costos_totales_graf = gastos_fijos + (costo_variable * cantidades)
 
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
+            plt.figure(figsize=(10,6))
+            plt.fill_between(cantidades, costos_totales_graf, ingresos_totales_graf, where=(cantidades < punto_equilibrio), color='red', alpha=0.3, label='Pérdidas')
+            plt.fill_between(cantidades, costos_totales_graf, ingresos_totales_graf, where=(cantidades >= punto_equilibrio), color='green', alpha=0.3, label='Ganancias')
+            plt.plot(cantidades, ingresos_totales_graf, label='Ingresos Totales', color='blue')
+            plt.plot(cantidades, costos_totales_graf, label='Costos Totales', color='orange')
+            plt.axvline(x=punto_equilibrio, color='red', linestyle='--', label=f'Punto de Equilibrio: {punto_equilibrio:.2f} unidades')
+            plt.axvline(x=unidades_producir, color='black', linestyle='-.', label=f'Unidades a Producir: {unidades_producir} unidades')
+            plt.xlabel('Cantidad vendida')
+            plt.ylabel('Total Gastos($)')
+            plt.title('Gráfico del Punto de Equilibrio: Pérdidas y Ganancias')
+            plt.legend()
+            plt.grid(True)
+            st.pyplot(plt)
 
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
-    )
+elif tipo_calculo == 'Cálculo con porcentaje de costo variable':
+    # Inputs adicionales para este caso
+    total_gastos = st.number_input('Ingrese el total de gastos ($)', min_value=0, value=0, step=100, key="total_gastos")
+    porcentaje_costo_variable = st.number_input('Ingrese el porcentaje del costo variable (%)', min_value=0.0, max_value=100.0, value=10.0, step=0.1, key="porcentaje_costo_variable") / 100
 
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
+    # Calcular total de ventas
+    total_ventas = total_gastos / (1 - porcentaje_costo_variable)
 
-    return gdp_df
+    # Mostrar el resultado
+    st.write(f"Total de Ventas Necesarias: **${total_ventas:.2f}**")
 
-gdp_df = get_gdp_data()
+    # Gráfico con punto de equilibrio
+    if st.button("Mostrar Gráfica"):
+        punto_equilibrio = total_gastos / (1 - porcentaje_costo_variable)
+        cantidades = np.arange(0, (punto_equilibrio*2), 1)
+        ingresos_totales_graf = total_ventas * (cantidades / punto_equilibrio)
+        costos_totales_graf = total_gastos + (porcentaje_costo_variable * total_ventas * cantidades / punto_equilibrio)
 
-# -----------------------------------------------------------------------------
-# Draw the actual page
+        plt.figure(figsize=(10,6))
+        plt.fill_between(cantidades, costos_totales_graf, ingresos_totales_graf, where=(cantidades < punto_equilibrio), color='red', alpha=0.3, label='Pérdidas')
+        plt.fill_between(cantidades, costos_totales_graf, ingresos_totales_graf, where=(cantidades >= punto_equilibrio), color='green', alpha=0.3, label='Ganancias')
+        plt.plot(cantidades, ingresos_totales_graf, label='Ingresos Totales', color='blue')
+        plt.plot(cantidades, costos_totales_graf, label='Costos Totales', color='orange')
+        plt.axvline(x=punto_equilibrio, color='red', linestyle='--', label=f'Punto de Equilibrio $: {punto_equilibrio:.2f}')
+        plt.xlabel('Ventas Necesarias$')
+        plt.ylabel('Total Gastos($)')
+        plt.title('Gráfico del Punto de Equilibrio con Porcentaje de Costo Variable')
+        plt.legend()
+        plt.grid(True)
+        st.pyplot(plt)
 
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
+elif tipo_calculo == 'Cálculo con total de gastos y ventas':
+    # Inputs
+    total_gastos = st.number_input('Ingrese el total de gastos ($)', min_value=0, value=10, step=100, key="total_gastos")
+    total_ventas = st.number_input('Ingrese el total de ventas ($)', min_value=0, value=20, step=100, key="total_ventas")
 
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
+    # Calcular porcentaje de costos variables
+    porcentaje_costo_variable = (total_ventas-total_gastos)/total_ventas
+    
+    # Mostrar el resultado
+    st.write(f"Porcentaje del Costo Variable: **{porcentaje_costo_variable*100:.2f}%**")
 
-# Add some spacing
-''
-''
+    # Gráfico corregido para este cálculo
+    if st.button("Mostrar Gráfica"):
+        plt.figure(figsize=(10,6))
+        plt.bar(['Total Gastos', 'Total Ventas'], [total_gastos, total_ventas], color=['orange', 'blue'])
+        plt.title('Comparación de Gastos y Ventas')
+        plt.ylabel('Dinero ($)')
+        st.pyplot(plt)
 
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
+elif tipo_calculo == 'Cálculo con total de ventas y % costo variable':
+    # Inputs
+    total_ventas = st.number_input('Ingrese el total de ventas ($)', min_value=0, value=0, step=100, key="total_ventas")
+    porcentaje_costo_variable = st.number_input('Ingrese el porcentaje del costo variable (%)', min_value=0.0, max_value=100.0, value=10.0, step=0.1, key="porcentaje_costo_variable") / 100
 
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
+    # Calcular total de gastos correctamente
+    total_gastos = total_ventas * (1-porcentaje_costo_variable)
 
-countries = gdp_df['Country Code'].unique()
+    # Mostrar el resultado
+    st.write(f"Total de Gastos: **${total_gastos:.2f}**")
 
-if not len(countries):
-    st.warning("Select at least one country")
+    # Gráfico para este cálculo
+    if st.button("Mostrar Gráfica"):
+        plt.figure(figsize=(10,6))
+        plt.pie([total_gastos, total_ventas-total_gastos], labels=['Gastos', 'Costo de ventas'], autopct='%1.1f%%', colors=['orange', 'green'])
+        plt.title('Distribución de Gastos y Costo de Ventas')
+        st.pyplot(plt)
 
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
-
-''
-''
-
-
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
-
-st.header(f'GDP in {to_year}', divider='gray')
-
-''
-
-cols = st.columns(4)
-
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
-
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
-        else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
-
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
+# Botón para limpiar la pantalla
+if st.button("Limpiar Pantalla"):
+    limpiar_pantalla()
